@@ -50,6 +50,8 @@ export default function Home() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
 
   const scrollToBottom = () => {
@@ -185,6 +187,7 @@ export default function Home() {
         }
       );
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const assistantMessages = messagesResponse.data.data.filter(
         (msg: any) => msg.role === "assistant"
       );
@@ -216,7 +219,7 @@ export default function Home() {
   };
 
   if (!isMounted) return null;
-  
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-100 via-purple-100 to-pink-100">
       <div className="container mx-auto px-4 py-8">
