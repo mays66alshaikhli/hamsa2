@@ -16,12 +16,18 @@ export default function Home() {
   const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     createThread();
     setupVoiceInput();
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -34,12 +40,23 @@ export default function Home() {
 
   const setupVoiceInput = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return alert("Speech recognition not supported");
+    if (!SpeechRecognition) {
+      alert("Speech recognition not supported in your browser");
+      return;
+    }
 
     const recognition = new SpeechRecognition();
     recognition.lang = "ar-SA";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
 
     recognition.onresult = (event: any) => {
       const result = event.results[0][0].transcript;
@@ -47,18 +64,41 @@ export default function Home() {
       sendMessage(result);
     };
 
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsListening(false);
+    };
+
     recognitionRef.current = recognition;
   };
 
   const speakText = (text: string) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = /[أ-ي]/.test(text) ? "ar-SA" : "en-US";
-    utterance.volume = 1;
-    utterance.rate = 1;
-    utterance.pitch = 1;
+    return new Promise((resolve) => {
+      if (!text) {
+        resolve(false);
+        return;
+      }
 
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = /[أ-ي]/.test(text) ? "ar-SA" : "en-US";
+      utterance.volume = 1;
+      utterance.rate = 0.9; // Slightly slower for better comprehension
+      utterance.pitch = 1;
+
+      utterance.onend = () => {
+        resolve(true);
+      };
+
+      utterance.onerror = (event) => {
+        console.error("SpeechSynthesis error", event);
+        resolve(false);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    });
   };
 
   const createThread = async () => {
@@ -81,15 +121,15 @@ export default function Home() {
   };
 
   const sendMessage = async (text: string) => {
-    if (!text) return;
+    if (!text || !threadId) return;
 
     setLoading(true);
     setMessages((prev) => [...prev, { role: "user", content: text }]);
 
     try {
-      const currentThreadId = threadId!;
+      // Send user message
       await axios.post(
-        `https://api.openai.com/v1/threads/${currentThreadId}/messages`,
+        `https://api.openai.com/v1/threads/${threadId}/messages`,
         { role: "user", content: text },
         {
           headers: {
@@ -100,8 +140,9 @@ export default function Home() {
         }
       );
 
+      // Create a run
       const runRes = await axios.post(
-        `https://api.openai.com/v1/threads/${currentThreadId}/runs`,
+        `https://api.openai.com/v1/threads/${threadId}/runs`,
         { assistant_id: process.env.NEXT_PUBLIC_OPENAI_ASSISTANT_ID },
         {
           headers: {
@@ -113,12 +154,13 @@ export default function Home() {
       );
 
       const runId = runRes.data.id;
-      let status = "in_progress";
+      let status = runRes.data.status;
 
-      while (status !== "completed") {
-        await new Promise((res) => setTimeout(res, 2000));
+      // Poll for completion
+      while (status !== "completed" && status !== "failed") {
+        await new Promise((res) => setTimeout(res, 1000));
         const statusRes = await axios.get(
-          `https://api.openai.com/v1/threads/${currentThreadId}/runs/${runId}`,
+          `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
           {
             headers: {
               Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
@@ -130,8 +172,13 @@ export default function Home() {
         status = statusRes.data.status;
       }
 
+      if (status === "failed") {
+        throw new Error("Run failed");
+      }
+
+      // Get the assistant's response
       const messageRes = await axios.get(
-        `https://api.openai.com/v1/threads/${currentThreadId}/messages`,
+        `https://api.openai.com/v1/threads/${threadId}/messages`,
         {
           headers: {
             Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
@@ -145,14 +192,28 @@ export default function Home() {
       const reply = assistantMsgs[0]?.content[0]?.text?.value ?? "No response";
 
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
-      speakText(reply);
+      
+      // Speak the assistant's response
+      await speakText(reply);
     } catch (error) {
       console.error("Message sending failed:", error);
-      setMessages((prev) => [...prev, { role: "assistant", content: "حدث خطأ في الاتصال بالمساعد." }]);
+      const errorMsg = "حدث خطأ في الاتصال بالمساعد. يرجى المحاولة مرة أخرى.";
+      setMessages((prev) => [...prev, { role: "assistant", content: errorMsg }]);
+      await speakText(errorMsg);
+    } finally {
+      setLoading(false);
+      setMessage("");
     }
+  };
 
-    setLoading(false);
-    setMessage("");
+  const toggleListening = () => {
+    if (!recognitionRef.current) return;
+
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      recognitionRef.current.start();
+    }
   };
 
   return (
@@ -178,16 +239,35 @@ export default function Home() {
                 <strong>{msg.role === "user" ? "أنت: " : "همسة: "}</strong> {msg.content}
               </div>
             ))}
+            {loading && (
+              <div className="text-center p-2">
+                <div className="animate-pulse">همسة تفكر...</div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
           <div className="text-center">
             <button
-              onClick={() => recognitionRef.current?.start()}
-              className="bg-red-700 hover:bg-red-800 text-white py-3 px-6 rounded-full font-semibold shadow-md transition duration-200"
+              onClick={toggleListening}
+              className={`${
+                isListening ? "bg-red-900" : "bg-red-700 hover:bg-red-800"
+              } text-white py-3 px-6 rounded-full font-semibold shadow-md transition duration-200 flex items-center justify-center mx-auto`}
               disabled={loading}
             >
-              🎤 اضغط للحديث مع همسة
+              {isListening ? (
+                <>
+                  <span className="relative flex h-3 w-3 mr-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                  </span>
+                  يتوقف عن الاستماع...
+                </>
+              ) : (
+                <>
+                  🎤 اضغط للحديث مع همسة
+                </>
+              )}
             </button>
           </div>
         </div>
