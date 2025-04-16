@@ -23,7 +23,7 @@ export default function Home() {
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: any) => {
       const spokenText = event.results[0][0].transcript;
       sendToOpenAI(spokenText);
     };
@@ -33,7 +33,6 @@ export default function Home() {
 
   const sendToOpenAI = async (message: string) => {
     try {
-      // Create a new thread
       const threadRes = await axios.post(
         "https://api.openai.com/v1/threads",
         {},
@@ -48,7 +47,6 @@ export default function Home() {
 
       const threadId = threadRes.data.id;
 
-      // Send message
       await axios.post(
         `https://api.openai.com/v1/threads/${threadId}/messages`,
         {
@@ -64,7 +62,6 @@ export default function Home() {
         }
       );
 
-      // Run the assistant
       const runRes = await axios.post(
         `https://api.openai.com/v1/threads/${threadId}/runs`,
         {
@@ -81,7 +78,6 @@ export default function Home() {
 
       const runId = runRes.data.id;
 
-      // Wait until complete
       let runStatus = "in_progress";
       while (runStatus !== "completed") {
         await new Promise((res) => setTimeout(res, 2000));
@@ -98,7 +94,6 @@ export default function Home() {
         runStatus = statusRes.data.status;
       }
 
-      // Get response
       const messagesRes = await axios.get(
         `https://api.openai.com/v1/threads/${threadId}/messages`,
         {
@@ -137,7 +132,13 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-100 to-pink-100">
       <button
         onClick={startListening}
-        className="bg-red-600 hover:bg-red
+        className="text-white bg-red-600 hover:bg-red-700 px-8 py-4 rounded-lg text-2xl shadow-lg"
+      >
+        🎤 اضغط وتكلم
+      </button>
+    </div>
+  );
+}
