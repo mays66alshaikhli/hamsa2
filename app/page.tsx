@@ -1,10 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-=======
-import { useEffect, useRef, useState } from "react";
->>>>>>> 68b2c62 (Fix: Enable voice response with Safari-friendly trigger)
 import axios from "axios";
+import Image from "next/image";
 
 declare global {
   interface Window {
@@ -14,7 +12,6 @@ declare global {
 }
 
 export default function Home() {
-
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([]);
@@ -22,14 +19,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [reply, setReply] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-
   const recognitionRef = useRef<any>(null);
-  const [replyText, setReplyText] = useState("");
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-
     setIsMounted(true);
     createThread();
     setupVoiceInput();
@@ -69,47 +61,16 @@ export default function Home() {
   const createThread = async () => {
     try {
       const response = await axios.post(
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Speech recognition not supported.");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = "ar-SA";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event: any) => {
-      const spokenText = event.results[0][0].transcript;
-      sendToOpenAI(spokenText);
-    };
-
-    recognitionRef.current = recognition;
-  }, []);
-
-  const sendToOpenAI = async (message: string) => {
-    setLoading(true);
-    setReplyText("");
-
-    try {
-      const threadRes = await axios.post(
-
         "https://api.openai.com/v1/threads",
         {},
         {
           headers: {
-
             "Content-Type": "application/json",
-
             Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
             "OpenAI-Beta": "assistants=v2",
-            "Content-Type": "application/json",
           },
         }
       );
-
       setThreadId(response.data.id);
     } catch (err) {
       console.error("Thread creation failed", err);
@@ -145,84 +106,51 @@ export default function Home() {
       await axios.post(
         `https://api.openai.com/v1/threads/${currentThreadId}/messages`,
         { role: "user", content },
-
-      const threadId = threadRes.data.id;
-
-      await axios.post(
-        `https://api.openai.com/v1/threads/${threadId}/messages`,
-        { role: "user", content: message },
-
         {
           headers: {
+            "Content-Type": "application/json",
             Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
             "OpenAI-Beta": "assistants=v2",
-            "Content-Type": "application/json",
           },
         }
       );
-
 
       const run = await axios.post(
         `https://api.openai.com/v1/threads/${currentThreadId}/runs`,
-
-      const runRes = await axios.post(
-        `https://api.openai.com/v1/threads/${threadId}/runs`,
-
         { assistant_id: process.env.NEXT_PUBLIC_OPENAI_ASSISTANT_ID },
         {
           headers: {
+            "Content-Type": "application/json",
             Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
             "OpenAI-Beta": "assistants=v2",
-            "Content-Type": "application/json",
           },
         }
       );
-
 
       let runStatus = "in_progress";
       while (runStatus !== "completed") {
         await new Promise((res) => setTimeout(res, 2000));
         const status = await axios.get(
           `https://api.openai.com/v1/threads/${currentThreadId}/runs/${run.data.id}`,
-
-      const runId = runRes.data.id;
-
-      let status = "in_progress";
-      while (status !== "completed") {
-        await new Promise((res) => setTimeout(res, 2000));
-        const check = await axios.get(
-          `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
-
           {
             headers: {
               Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
               "OpenAI-Beta": "assistants=v2",
-              "Content-Type": "application/json",
             },
           }
         );
-
         runStatus = status.data.status;
       }
 
       const msgRes = await axios.get(
         `https://api.openai.com/v1/threads/${currentThreadId}/messages`,
-
-        status = check.data.status;
-      }
-
-      const messagesRes = await axios.get(
-        `https://api.openai.com/v1/threads/${threadId}/messages`,
-
         {
           headers: {
             Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
             "OpenAI-Beta": "assistants=v2",
-            "Content-Type": "application/json",
           },
         }
       );
-
 
       const replyText = msgRes.data.data.find((msg: any) => msg.role === "assistant")
         ?.content?.[0]?.text?.value || "لم أفهم ذلك.";
@@ -238,21 +166,10 @@ export default function Home() {
         ...prev,
         { role: "assistant", content: "حدث خطأ أثناء الاتصال بالمساعد." },
       ]);
-
-      const reply =
-        messagesRes.data.data.find((msg: any) => msg.role === "assistant")
-          ?.content?.[0]?.text?.value || "لم أفهم ذلك.";
-
-      setReplyText(reply); // ✅ Save it, don’t auto-speak
-    } catch (err) {
-      console.error("Error:", err);
-      setReplyText("حدث خطأ أثناء الاتصال بالمساعد.");
-
     }
 
     setLoading(false);
   };
-
 
   if (!isMounted) return null;
 
@@ -336,44 +253,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-
-  const speak = (text: string) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = /[أ-ي]/.test(text) ? "ar-SA" : "en-US";
-    utterance.volume = 1;
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const startMic = () => recognitionRef.current?.start();
-
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-6">
-      <button
-        onClick={startMic}
-        className="px-6 py-4 bg-red-600 text-white text-xl font-bold rounded-lg shadow-lg hover:bg-red-700"
-      >
-        🎤 اضغط للتحدث مع همسة
-      </button>
-
-      {loading && <p className="mt-4 text-blue-600">... جاري المعالجة</p>}
-
-      {replyText && (
-        <div className="mt-6 text-center">
-          <p className="text-lg text-black font-medium mb-3 whitespace-pre-wrap">
-            💬 {replyText}
-          </p>
-          <button
-            onClick={() => speak(replyText)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            🔊 اضغط لسماع الرد
-          </button>
-        </div>
-      )}
-
     </div>
   );
 }
