@@ -4,15 +4,10 @@ import { useEffect, useRef } from "react";
 import axios from "axios";
 
 export default function Home() {
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
-    setupVoiceInput();
-  }, []);
-
-  const setupVoiceInput = () => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Speech recognition not supported.");
       return;
@@ -29,7 +24,7 @@ export default function Home() {
     };
 
     recognitionRef.current = recognition;
-  };
+  }, []);
 
   const sendToOpenAI = async (message: string) => {
     try {
@@ -44,15 +39,11 @@ export default function Home() {
           },
         }
       );
-
       const threadId = threadRes.data.id;
 
       await axios.post(
         `https://api.openai.com/v1/threads/${threadId}/messages`,
-        {
-          role: "user",
-          content: message,
-        },
+        { role: "user", content: message },
         {
           headers: {
             Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
@@ -64,9 +55,7 @@ export default function Home() {
 
       const runRes = await axios.post(
         `https://api.openai.com/v1/threads/${threadId}/runs`,
-        {
-          assistant_id: process.env.NEXT_PUBLIC_OPENAI_ASSISTANT_ID,
-        },
+        { assistant_id: process.env.NEXT_PUBLIC_OPENAI_ASSISTANT_ID },
         {
           headers: {
             Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
@@ -78,10 +67,10 @@ export default function Home() {
 
       const runId = runRes.data.id;
 
-      let runStatus = "in_progress";
-      while (runStatus !== "completed") {
+      let status = "in_progress";
+      while (status !== "completed") {
         await new Promise((res) => setTimeout(res, 2000));
-        const statusRes = await axios.get(
+        const check = await axios.get(
           `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
           {
             headers: {
@@ -91,7 +80,7 @@ export default function Home() {
             },
           }
         );
-        runStatus = statusRes.data.status;
+        status = check.data.status;
       }
 
       const messagesRes = await axios.get(
@@ -105,39 +94,36 @@ export default function Home() {
         }
       );
 
-      const assistantReply =
+      const reply =
         messagesRes.data.data.find((msg: any) => msg.role === "assistant")
           ?.content?.[0]?.text?.value || "لم أفهم ذلك.";
 
-      speakOutLoud(assistantReply);
+      speak(reply);
     } catch (err) {
-      console.error("OpenAI API Error:", err);
-      speakOutLoud("حدث خطأ أثناء الاتصال بالمساعد.");
+      console.error("Error:", err);
+      speak("حدث خطأ أثناء الاتصال بالمساعد.");
     }
   };
 
-  const speakOutLoud = (text: string) => {
+  const speak = (text: string) => {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = /[أ-ي]/.test(text) ? "ar-SA" : "en-US";
     utterance.volume = 1;
     utterance.rate = 1;
     utterance.pitch = 1;
-
-    window.speechSynthesis.cancel(); // Cancel any current speech
+    window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   };
 
-  const startListening = () => {
-    recognitionRef.current?.start();
-  };
+  const startMic = () => recognitionRef.current?.start();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-100 to-pink-100">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <button
-        onClick={startListening}
-        className="text-white bg-red-600 hover:bg-red-700 px-8 py-4 rounded-lg text-2xl shadow-lg"
+        onClick={startMic}
+        className="px-6 py-4 bg-red-600 text-white text-xl font-bold rounded-lg shadow-lg hover:bg-red-700"
       >
-        🎤 اضغط وتكلم
+        🎤 اضغط للتحدث مع همسة
       </button>
     </div>
   );
