@@ -179,6 +179,9 @@ export default function Home() {
     setLoading(false);
     setMessage("");
   };
+useEffect(() => {
+  speakText("تم التشغيل بنجاح");
+}, []);
 
   if (!isMounted) return null;
 
